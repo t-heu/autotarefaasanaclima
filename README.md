@@ -30,3 +30,13 @@
 ou
 * Acesse https://home.openweathermap.org/users/sign_up e crie sua conta.
 * Vá em API keys e copie sua `API_KEY`.
+
+### 4. Adicione seus segredos no GitHub
+Vá em: 🔐 Settings → Secrets → Actions → New repository secret
+
+Crie:
+Nome	Valor
+- OPENWEATHER_KEY	Sua chave da API de clima
+- ASANA_TOKEN	Seu token do Asana (Bearer)
+- PROJECT_ID	GID do seu projeto
+- SECTION_ID	GID da seção do Asana

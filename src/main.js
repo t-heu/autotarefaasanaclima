@@ -108,7 +108,7 @@ async function verificarClimaECriarTarefa() {
         due_on: formatDate(new Date()), // hoje
       });
     } else {
-      console.log('Sem chuva prevista para daqui 4 dias.');
+      console.log('Sem chuva prevista.');
     }
   } catch (error) {
     console.error('❌ Erro ao verificar clima ou criar tarefa:', error.response?.data || error.message);
@@ -144,6 +144,6 @@ async function listarSecoesDoProjeto() {
 }
 
 // Execução principal
-criarTarefaSimples();
+//criarTarefaSimples();
 //listarSecoesDoProjeto();
 verificarClimaECriarTarefa();
