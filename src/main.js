@@ -186,4 +186,4 @@ async function listarSecoesDoProjeto() {
 // Execução principal
 //criarTarefaSimples();
 //listarSecoesDoProjeto();
-verificarClimaECriarTarefa();
+verificarClimaPorRegioes();
