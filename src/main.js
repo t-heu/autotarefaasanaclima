@@ -5,8 +5,6 @@ const ASANA_TOKEN = process.env.ASANA_TOKEN
 const PROJECT_ID = process.env.PROJECT_ID
 const SECTION_ID = process.env.SECTION_ID
 const OPENWEATHER_KEY = process.env.OPENWEATHER_KEY
-const LAT = '-12.2569'; // Latitude de Feira de Santana
-const LON = '-38.9645'; // Longitude de Feira de Santana
 
 // Função utilitária para formatar data no formato YYYY-MM-DD
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -93,25 +91,67 @@ async function criarTarefa({ name, notes, due_on }) {
 }
 
 // Verifica previsão e cria tarefa de aviso se necessário
-async function verificarClimaECriarTarefa() {
-  try {
-    const { data: previsao } = await axios.get(
-      `https://api.openweathermap.org/data/2.5/forecast?lat=${LAT}&lon=${LON}&appid=${OPENWEATHER_KEY}&units=metric&lang=pt_br`
-    );
+const regions = [
+  {
+    nome: 'Nordeste',
+    cidade: 'Salvador',
+    lat: -12.9777,
+    lon: -38.5016,
+    descricao: 'Lojas da região Nordeste',
+  },/*
+  {
+    nome: 'Sudeste',
+    cidade: 'São Paulo',
+    lat: -23.5505,
+    lon: -46.6333,
+    descricao: 'Lojas da região Sudeste',
+  },
+  {
+    nome: 'Sul',
+    cidade: 'Porto Alegre',
+    lat: -30.0346,
+    lon: -51.2177,
+    descricao: 'Lojas da região Sul',
+  },
+  {
+    nome: 'Centro-Oeste',
+    cidade: 'Brasília',
+    lat: -15.7939,
+    lon: -47.8828,
+    descricao: 'Lojas da região Centro-Oeste',
+  },
+  {
+    nome: 'Norte',
+    cidade: 'Manaus',
+    lat: -3.1190,
+    lon: -60.0217,
+    descricao: 'Lojas da região Norte',
+  }*/
+];
 
-    const { temDiaViavel, dia } = buscarDiaBomParaAtividade(previsao);
+async function verificarClimaPorRegioes() {
+  for (const region of regions) {
+    try {
+      const { lat, lon, nome, cidade, descricao } = region;
+      
+      const { data: previsao } = await axios.get(
+        `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${OPENWEATHER_KEY}&units=metric&lang=pt_br`
+      );
 
-    if (temDiaViavel) {
-      await criarTarefa({
-        name: `⚠️ Reforçar estoque de Palhetas nas lojas - previsão de chuva em ${dia}`,
-        notes: `Previsão de chuva para o dia ${dia}. Reforce o estoque de palhetas em todas as lojas para atender à demanda em Feira de Santana.`,
-        due_on: formatDate(new Date()), // hoje
-      });
-    } else {
-      console.log('Sem chuva prevista.');
+      const { temDiaViavel, dia } = buscarDiaBomParaAtividade(previsao);
+
+      if (temDiaViavel) {
+        await criarTarefa({
+          name: `☔ Reforçar estoque de palhetas – previsão de chuva (${nome}) em ${dia}`,
+          notes: `Previsão de chuva em ${cidade} (${nome}) no dia ${dia}. ${descricao}.`,
+          due_on: formatDate(new Date()), // hoje
+        });
+      } else {
+        console.log(`🌤️ Sem chuva prevista para a região ${nome}`);
+      }
+    } catch (error) {
+      console.error(`❌ Erro ao verificar clima da região ${region.nome}:`, error.response?.data || error.message);
     }
-  } catch (error) {
-    console.error('❌ Erro ao verificar clima ou criar tarefa:', error.response?.data || error.message);
   }
 }
 
