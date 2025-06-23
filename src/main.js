@@ -1,13 +1,57 @@
 require('dotenv').config();
+const { google } = require('googleapis');
 const axios = require('axios');
 
-const ASANA_TOKEN = process.env.ASANA_TOKEN
-const PROJECT_ID = process.env.PROJECT_ID
-const SECTION_ID = process.env.SECTION_ID
-const OPENWEATHER_KEY = process.env.OPENWEATHER_KEY
+const { ASANA_TOKEN, PROJECT_ID, SECTION_ID, OPENWEATHER_KEY } = process.env;
 
 // Função utilitária para formatar data no formato YYYY-MM-DD
 const formatDate = (date) => date.toISOString().split('T')[0];
+
+const regions = [
+  {
+    nome: 'Nordeste',
+    cidade: 'Salvador',
+    lat: -12.9777,
+    lon: -38.5016,
+    descricao: 'Lojas da região Nordeste',
+  },/*
+  {
+    nome: 'Sudeste',
+    cidade: 'São Paulo',
+    lat: -23.5505,
+    lon: -46.6333,
+    descricao: 'Lojas da região Sudeste',
+  },
+  {
+    nome: 'Sul',
+    cidade: 'Porto Alegre',
+    lat: -30.0346,
+    lon: -51.2177,
+    descricao: 'Lojas da região Sul',
+  },
+  {
+    nome: 'Centro-Oeste',
+    cidade: 'Brasília',
+    lat: -15.7939,
+    lon: -47.8828,
+    descricao: 'Lojas da região Centro-Oeste',
+  },
+  {
+    nome: 'Norte',
+    cidade: 'Manaus',
+    lat: -3.1190,
+    lon: -60.0217,
+    descricao: 'Lojas da região Norte',
+  }*/
+];
+
+async function authorizeGoogle() {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: 'credentials.json',
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+  return await auth.getClient();
+}
 
 // Busca o próximo dia sem chuva (ignorando hoje e amanhã)
 function buscarDiaBomParaAtividade(previsao) {
@@ -59,7 +103,6 @@ async function moverTarefaParaSecao(taskGid) {
   }
 }
 
-// Cria uma tarefa no Asana
 async function criarTarefa({ name, notes, due_on }) {
   try {
     const resposta = await axios.post(
@@ -80,55 +123,80 @@ async function criarTarefa({ name, notes, due_on }) {
       }
     );
 
-    await moverTarefaParaSecao(resposta.data.data.gid);
+    const taskId = response.data?.data?.gid || "ERRO";
 
-    console.log('✅ Tarefa criada com sucesso!');
-    return resposta.data.data;
+    if (taskId !== "ERRO") {
+      await moverTarefaParaSecao(taskId);
+    }
+
+    console.log('✅ Tarefa criada e registrada!');
+    return taskId;
   } catch (error) {
     console.error('❌ Erro ao criar tarefa:', error.response?.data || error.message);
     return null;
   }
 }
 
-// Verifica previsão e cria tarefa de aviso se necessário
-const regions = [
-  {
-    nome: 'Nordeste',
-    cidade: 'Salvador',
-    lat: -12.9777,
-    lon: -38.5016,
-    descricao: 'Lojas da região Nordeste',
-  },/*
-  {
-    nome: 'Sudeste',
-    cidade: 'São Paulo',
-    lat: -23.5505,
-    lon: -46.6333,
-    descricao: 'Lojas da região Sudeste',
-  },
-  {
-    nome: 'Sul',
-    cidade: 'Porto Alegre',
-    lat: -30.0346,
-    lon: -51.2177,
-    descricao: 'Lojas da região Sul',
-  },
-  {
-    nome: 'Centro-Oeste',
-    cidade: 'Brasília',
-    lat: -15.7939,
-    lon: -47.8828,
-    descricao: 'Lojas da região Centro-Oeste',
-  },
-  {
-    nome: 'Norte',
-    cidade: 'Manaus',
-    lat: -3.1190,
-    lon: -60.0217,
-    descricao: 'Lojas da região Norte',
-  }*/
-];
+async function verificarTarefasConcluidas() {
+  const authClient = await authorizeGoogle();
+  const sheets = google.sheets({ version: 'v4', auth: authClient });
 
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: 'Página1',
+  });
+
+  const data = res.data.values;
+  if (!data || data.length === 0) {
+    console.log('⚠️ Nenhum dado encontrado na planilha.');
+    return;
+  }
+
+  const header = data[0];
+  const taskIdCol = header.indexOf('Task ID');
+  const concluidoCol = header.indexOf('Concluído');
+
+  if (taskIdCol === -1 || concluidoCol === -1) {
+    console.log("❌ Coluna 'Task ID' ou 'Concluído' não encontrada.");
+    return;
+  }
+
+  for (let i = 1; i < data.length; i++) {
+    const taskId = data[i][taskIdCol];
+    const jaConcluido = data[i][concluidoCol];
+
+    if (!taskId || jaConcluido === 'SIM') continue;
+
+    try {
+      const response = await axios.get(`https://app.asana.com/api/1.0/tasks/${taskId}`, {
+        headers: {
+          Authorization: `Bearer ${ASANA_TOKEN}`,
+        },
+      });
+
+      const completed = response.data?.data?.completed;
+      if (completed) {
+        const rowIndex = i + 1;
+        const colLetter = String.fromCharCode(65 + concluidoCol);
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: `Página1!${colLetter}${rowIndex}`,
+          valueInputOption: 'RAW',
+          requestBody: {
+            values: [['SIM']],
+          },
+        });
+        console.log(`✅ Tarefa ${taskId} marcada como concluída na linha ${rowIndex}.`);
+      } else {
+        console.log(`🕒 Tarefa ${taskId} ainda não concluída.`);
+      }
+    } catch (error) {
+      console.error(`❌ Erro ao verificar tarefa ${taskId}: ${error.message}`);
+    }
+  }
+}
+
+// Verifica previsão e cria tarefa de aviso se necessário
 async function verificarClimaPorRegioes() {
   for (const region of regions) {
     try {
@@ -186,4 +254,7 @@ async function listarSecoesDoProjeto() {
 // Execução principal
 //criarTarefaSimples();
 //listarSecoesDoProjeto();
-verificarClimaPorRegioes();
+//verificarTarefasConcluidas
+(async () => {
+  await verificarClimaPorRegioes();
+})();
