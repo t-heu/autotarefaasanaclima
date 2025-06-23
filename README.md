@@ -1,8 +1,8 @@
 ## 🧠 Visão geral da lógica:
 
-1. Seu servidor roda 1x por dia (cron).
+1. Servidor roda 1x por semana (cron).
 2. Ele consulta a previsão do tempo.
-3. Se detectar **chuva em 4 dias**, cria tarefa no Asana.
+3. Se detectar **chuva em 7 dias** por região, cria tarefa no Asana.
 
 ---
 
